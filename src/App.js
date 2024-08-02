@@ -14,6 +14,7 @@ const App = () => {
     useEffect(() => {
         // Fetch the simulation data from the Django backend
         fetch('http://localhost:8000/api/run-simulation/')
+        // fetch('https://airdefense-backend-ghexf2eagme5gfg5.eastus-01.azurewebsites.net/api/run-simulation/')
             .then(response => response.json())
             .then(data => {
                 setSimulationData(data.simulation_data);
