@@ -6,17 +6,15 @@ const App = () => {
     const [currentFrame, setCurrentFrame] = useState(0);
     const [speed, setSpeed] = useState(500); // Speed in milliseconds per frame
     const svgRef = useRef(null);
-    const previousPositions = useRef({});
 
     // Offset and scale settings
     const offsetX = 50; // Shift the grid rightward
     const offsetY = 50; // Shift the grid downward
-    const scale = 50; // Scale factor for the grid
+    const scale = 100; // Scale factor for the grid (increased for better visibility)
 
     useEffect(() => {
         // Fetch the simulation data from the backend
-        // fetch('http://localhost:8000/api/run-simulation/')
-        fetch('https://airdefense-backend-ghexf2eagme5gfg5.eastus-01.azurewebsites.net/api/run-simulation/')
+        fetch('http://localhost:8000/api/run-simulation/')
             .then(response => response.json())
             .then(data => {
                 setSimulationData(data.simulation_data);
@@ -37,31 +35,52 @@ const App = () => {
     }, [simulationData, speed]);
 
     useEffect(() => {
-        if (svgRef.current && simulationData.length > 0) {
-            const frameData = simulationData[currentFrame];
-            const svg = svgRef.current;
-
-            // Clear previous frame's content
-            svg.innerHTML = '';
-
-            // Draw grid, towers, targets, and rockets
-            drawGrid(svg, frameData, scale);
-            drawTowers(svg, frameData.towers, scale);
-            drawTargets(svg, frameData.targets, scale);
-            drawRockets(svg, frameData.rockets, scale);
-        }
-    }, [currentFrame]);
+      if (svgRef.current && simulationData.length > 0) {
+          const frameData = simulationData[currentFrame];
+          const svg = svgRef.current;
+  
+          // Clear previous frame's content
+          svg.innerHTML = '';
+  
+          // Draw grid, towers, targets, and rockets
+          drawGrid(svg, frameData, scale);
+          drawTowers(svg, frameData.towers, scale);
+          drawTargets(svg, frameData.targets, scale);
+          drawRockets(svg, frameData.rockets, frameData.towers, scale); // Pass towers to drawRockets
+      }
+  }, [currentFrame]);
+  
 
     const drawGrid = (svg, frameData, scale) => {
-        for (let i = 0; i <= frameData.N; i++) {
+        // Determine the number of rows and columns based on the maximum coordinates of targets, towers, and rockets
+        const allCoords = [
+            ...frameData.targets,
+            ...frameData.towers.map(t => [t[0], t[1]]),
+            ...frameData.rockets.map(r => r.position),
+            ...frameData.rockets.map(r => r.start)
+        ];
+        const maxRow = Math.max(...allCoords.map(coord => coord[0])) + 1;
+        const maxCol = Math.max(...allCoords.map(coord => coord[1])) + 1;
+
+        // Draw horizontal and vertical grid lines
+        for (let i = 0; i <= maxRow; i++) {
             // Horizontal grid lines
-            svg.appendChild(createLine(offsetX, offsetY + i * scale, offsetX + frameData.M * scale, offsetY + i * scale, 'lightgray'));
+            svg.appendChild(createLine(offsetX, offsetY + i * scale, offsetX + maxCol * scale, offsetY + i * scale, 'lightgray'));
+        }
+
+        for (let i = 0; i <= maxCol; i++) {
             // Vertical grid lines
-            svg.appendChild(createLine(offsetX + i * scale, offsetY, offsetX + i * scale, offsetY + frameData.N * scale, 'lightgray'));
-            // Y-axis labels
+            svg.appendChild(createLine(offsetX + i * scale, offsetY, offsetX + i * scale, offsetY + maxRow * scale, 'lightgray'));
+        }
+
+        // Draw X-axis labels
+        for (let i = 0; i <= maxCol; i++) {
+            svg.appendChild(createText(offsetX + i * scale - 10, offsetY + maxRow * scale + 20, `${i}`, 'black', 14));
+        }
+
+        // Draw Y-axis labels
+        for (let i = 0; i <= maxRow; i++) {
             svg.appendChild(createText(offsetX - 20, offsetY + i * scale + 5, `${i}`, 'black', 14));
-            // X-axis labels
-            svg.appendChild(createText(offsetX + i * scale - 10, offsetY + frameData.N * scale + 20, `${i}`, 'black', 14));
         }
     };
 
@@ -80,35 +99,84 @@ const App = () => {
         });
     };
 
-    const drawRockets = (svg, rockets, scale) => {
-        rockets.forEach((rocket, idx) => {
-            const path = rocket.path; // Full path of the rocket
-            const intercepted = rocket.intercepted;
-            let lastPosition = rocket.start;
+    const drawRockets = (svg, rockets, towers, scale) => {
+      rockets.forEach((rocket, idx) => {
+          const path = rocket.path; // Full path of the rocket
+          let intercepted = false;
+          let lastPosition = rocket.start;
+  
+          for (let i = 1; i < path.length; i++) {
+              const [prevX, prevY] = path[i - 1];
+              const [currX, currY] = path[i];
+  
+              // Check if the rocket is within the interception radius of any tower
+              let inTowerRadius = false;
+              for (let tower of towers) {
+                  const [towerX, towerY] = tower;
+                  const distance = Math.sqrt(
+                      (currX - towerX) ** 2 + (currY - towerY) ** 2
+                  );
+                  if (distance <= tower[2]) { // tower[2] is the radius
+                      inTowerRadius = true;
+                      intercepted = true;
+                      break;
+                  }
+              }
+  
+              if (intercepted) {
+                  // Mark rocket as intercepted and stop drawing further
+                  svg.appendChild(createText(offsetX + currY * scale, offsetY + currX * scale, 'K', 'red', 20));
+                  return;
+              } else {
+                  // Draw the trace from the previous point to the current point
+                  svg.appendChild(createLine(
+                      offsetX + prevY * scale,
+                      offsetY + prevX * scale,
+                      offsetX + currY * scale,
+                      offsetY + currX * scale,
+                      `hsl(${idx * 60}, 100%, 50%)`
+                  ));
+  
+                  // Draw the missile image at the current position
+                  if (i === path.length - 1) {
+                      const missileImage = createImage(
+                          offsetX + currY * scale - 10,
+                          offsetY + currX * scale - 10,
+                          '/missile.png',
+                          20, 20
+                      );
+                      svg.appendChild(missileImage);
+                  }
+              }
+  
+              // Update last position
+              lastPosition = [currX, currY];
+          }
+  
+          // If the rocket is at its last position and not intercepted, still show the missile image
+          if (!intercepted && path.length > 0) {
+              const [currX, currY] = path[path.length - 1];
+              const missileImage = createImage(
+                  offsetX + currY * scale - 10,
+                  offsetY + currX * scale - 10,
+                  '/missile.png',
+                  20, 20
+              );
+              svg.appendChild(missileImage);
+          }
+      });
+  };
+  
+  
 
-            // Draw the trajectory up to the current position or the interception point
-            for (let i = 1; i < path.length && !intercepted; i++) {
-                const [prevX, prevY] = path[i - 1];
-                const [currX, currY] = path[i];
-                svg.appendChild(createLine(
-                    offsetX + prevY * scale,
-                    offsetY + prevX * scale,
-                    offsetX + currY * scale,
-                    offsetY + currX * scale,
-                    `hsl(${idx * 60}, 100%, 50%)`
-                ));
-                lastPosition = [currX, currY];
-            }
-
-            if (intercepted) {
-                // Mark intercepted rocket with 'K' at the interception point
-                svg.appendChild(createText(offsetX + lastPosition[1] * scale, offsetY + lastPosition[0] * scale, 'K', 'red', 20));
-            } else {
-                // Draw the rocket at the current position with direction indicator
-                const direction = getRocketDirection(rocket.start, rocket.end);
-                svg.appendChild(createTriangle(offsetX + lastPosition[1] * scale, offsetY + lastPosition[0] * scale, direction, `hsl(${idx * 60}, 100%, 50%)`));
-            }
-        });
+    const createImage = (x, y, href, width, height) => {
+        const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+        image.setAttributeNS(null, 'x', x);
+        image.setAttributeNS(null, 'y', y);
+        image.setAttributeNS(null, 'width', width);
+        image.setAttributeNS(null, 'height', height);
+        image.setAttributeNS('http://www.w3.org/1999/xlink', 'href', href);
+        return image;
     };
 
     const createLine = (x1, y1, x2, y2, color) => {
@@ -175,32 +243,6 @@ const App = () => {
         textElement.setAttribute('dominant-baseline', 'central');
         textElement.textContent = text;
         return textElement;
-    };
-
-    const createTriangle = (cx, cy, direction, color) => {
-        const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-
-        const triangle = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        triangle.setAttribute('fill', color);
-        triangle.setAttribute('transform', `rotate(${direction}, ${cx}, ${cy})`);
-
-        const points = [
-            `${cx - 7},${cy + 10}`, // Bottom left
-            `${cx + 7},${cy + 10}`, // Bottom right
-            `${cx},${cy - 10}`      // Top
-        ];
-
-        triangle.setAttribute('points', points.join(' '));
-        group.appendChild(triangle);
-
-        return group;
-    };
-
-    const getRocketDirection = (start, end) => {
-        const [x1, y1] = start;
-        const [x2, y2] = end;
-        const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
-        return angle + 90; // Rotate to point in the direction of movement
     };
 
     return (
