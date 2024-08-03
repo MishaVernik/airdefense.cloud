@@ -5,6 +5,9 @@ const App = () => {
     const [simulationData, setSimulationData] = useState([]);
     const [currentFrame, setCurrentFrame] = useState(0);
     const [speed, setSpeed] = useState(500); // Speed in milliseconds per frame
+    const [gridSize, setGridSize] = useState(5);
+    const [numTowers, setNumTowers] = useState(2);
+    const [numMissiles, setNumMissiles] = useState(2);
     const svgRef = useRef(null);
 
     // Offset and scale settings
@@ -14,17 +17,30 @@ const App = () => {
 
     useEffect(() => {
         // Fetch the simulation data from the backend
-        // fetch('http://localhost:8000/api/run-simulation/')
-        fetch('https://airdefense-backend-ghexf2eagme5gfg5.eastus-01.azurewebsites.net/api/run-simulation/')
-            .then(response => response.json())
-            .then(data => {
-                setSimulationData(data.simulation_data);
-                setCurrentFrame(0);
-            })
-            .catch(error => {
-                console.error('Error fetching simulation data:', error);
-            });
-    }, []);
+        runSimulation();
+    }, [gridSize, numTowers, numMissiles]);
+
+    const runSimulation = () => {
+        fetch('http://localhost:8000/api/run-simulation/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                gridSize: gridSize,
+                numTowers: numTowers,
+                numMissiles: numMissiles,
+            }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            setSimulationData(data.simulation_data);
+            setCurrentFrame(0);
+        })
+        .catch(error => {
+            console.error('Error fetching simulation data:', error);
+        });
+    };
 
     useEffect(() => {
         if (simulationData.length > 0) {
@@ -50,7 +66,6 @@ const App = () => {
           drawRockets(svg, frameData.rockets, frameData.towers, scale); // Pass towers to drawRockets
       }
   }, [currentFrame]);
-  
 
     const drawGrid = (svg, frameData, scale) => {
         // Determine the number of rows and columns based on the maximum coordinates of targets, towers, and rockets
@@ -248,25 +263,65 @@ const App = () => {
 
     return (
         <div className="App">
-            <h1>Air Defense Simulation</h1>
-            <h3>Iteration {simulationData[currentFrame]?.iteration}, Time Step {simulationData[currentFrame]?.time_step + 1}</h3>
-
-            <div className="slider-container">
-                <label htmlFor="speed-slider">Animation Speed:</label>
-                <input
-                    id="speed-slider"
-                    type="range"
-                    min="100"
-                    max="2000"
-                    value={speed}
-                    onChange={(e) => setSpeed(Number(e.target.value))}
-                />
-                <span>{speed} ms/frame</span>
+            <div className="sidebar">
+                <h2>Adjust Parameters</h2>
+                <div className="slider-container">
+                    <label>Grid Size: {gridSize}</label>
+                    <input
+                        type="range"
+                        min="3"
+                        max="10"
+                        value={gridSize}
+                        onChange={(e) => setGridSize(Number(e.target.value))}
+                    />
+                </div>
+                <div className="slider-container">
+                    <label>Number of Towers: {numTowers}</label>
+                    <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        value={numTowers}
+                        onChange={(e) => setNumTowers(Number(e.target.value))}
+                    />
+                </div>
+                <div className="slider-container">
+                    <label>Number of Missiles: {numMissiles}</label>
+                    <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        value={numMissiles}
+                        onChange={(e) => setNumMissiles(Number(e.target.value))}
+                    />
+                </div>
+                <div className="slider-container">
+                    <label htmlFor="speed-slider">Animation Speed: {speed} ms/frame</label>
+                    <input
+                        id="speed-slider"
+                        type="range"
+                        min="100"
+                        max="2000"
+                        value={speed}
+                        onChange={(e) => setSpeed(Number(e.target.value))}
+                    />
+                </div>
+                <button onClick={runSimulation}>Run Simulation</button>
             </div>
 
-            <svg ref={svgRef} width={800} height={800} style={{ border: '1px solid black' }}>
-                {/* SVG elements will be dynamically generated here */}
-            </svg>
+            <div className="results">
+                <h2>Simulation Predictions</h2>
+                {simulationData.length > 0 ? (
+                    <>
+                        <h3>Iteration {simulationData[currentFrame]?.iteration}, Time Step {simulationData[currentFrame]?.time_step + 1}</h3>
+                        <svg ref={svgRef} width={800} height={800} style={{ border: '1px solid black' }}>
+                            {/* SVG elements will be dynamically generated here */}
+                        </svg>
+                    </>
+                ) : (
+                    <p>Adjust parameters and click "Run Simulation" to see predictions.</p>
+                )}
+            </div>
         </div>
     );
 };
