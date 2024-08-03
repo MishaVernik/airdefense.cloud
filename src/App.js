@@ -23,7 +23,7 @@ const App = () => {
 
     const runSimulation = () => {
       // fetch('http://localhost:8000/api/run-simulation/', {
-        fetch('http://localhost:8000/api/run-simulation/', {
+        fetch('https://airdefense-backend-ghexf2eagme5gfg5.eastus-01.azurewebsites.net/api/run-simulation/', {
           
             method: 'POST',
             headers: {
