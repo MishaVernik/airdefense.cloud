@@ -7,6 +7,7 @@ const App = () => {
     const [speed, setSpeed] = useState(500); // Speed in milliseconds per frame
     const [gridSize, setGridSize] = useState(5);
     const [numTowers, setNumTowers] = useState(2);
+    const [numCities, setNumCities] = useState(2);
     const [numMissiles, setNumMissiles] = useState(2);
     const svgRef = useRef(null);
 
@@ -18,10 +19,12 @@ const App = () => {
     useEffect(() => {
         // Fetch the simulation data from the backend
         runSimulation();
-    }, [gridSize, numTowers, numMissiles]);
+    }, [gridSize, numTowers, numCities, numMissiles]);
 
     const runSimulation = () => {
+      // fetch('http://localhost:8000/api/run-simulation/', {
         fetch('http://localhost:8000/api/run-simulation/', {
+          
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -30,6 +33,7 @@ const App = () => {
                 gridSize: gridSize,
                 numTowers: numTowers,
                 numMissiles: numMissiles,
+                numCities: numCities,
             }),
         })
         .then(response => response.json())
@@ -293,6 +297,16 @@ const App = () => {
                         max="5"
                         value={numMissiles}
                         onChange={(e) => setNumMissiles(Number(e.target.value))}
+                    />
+                </div>
+                <div className="slider-container">
+                    <label>Number of Cities: {numCities}</label>
+                    <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        value={numCities}
+                        onChange={(e) => setNumCities(Number(e.target.value))}
                     />
                 </div>
                 <div className="slider-container">
